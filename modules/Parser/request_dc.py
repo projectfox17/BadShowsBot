@@ -36,8 +36,9 @@ class RequestResult:
 
     result: ShowIDs | None
     page: int
-    status: int
+    status: int = field(default=0)
     time: float = field(default=0.0)
+    size: int = field(default=0)
     n_matches: int = field(default=0)
     n_shows: int = field(default=0)
 
