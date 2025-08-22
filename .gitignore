@@ -1,6 +1,6 @@
-./logs/
-!./logs/.gitkeep
 *.log
+/logs/*
+!/logs/.gitkeep
 
 # Virtual envs
 .env
