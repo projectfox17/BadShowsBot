@@ -33,8 +33,8 @@ async def main() -> None:
     print(
         f"Found {show_ids.total} shows ({len(show_ids.films)} films, {len(show_ids.series)} series) in {time:.3f}s"
     )
-    print(f"Page success rate {(success_count / (P_RANGE[1] - P_RANGE[0]) * 100):.1f}%")
-    print(f"Show success rate {(show_ids.total / (P_RANGE[1] - P_RANGE[0]) * 2):.1f}%")
+    print(f"Page success rate {(success_count / (P_RANGE[1] - P_RANGE[0] + 1) * 100):.1f}%")
+    print(f"Show success rate {(show_ids.total / (P_RANGE[1] - P_RANGE[0] + 1) * 2):.1f}%")
 
 
 if __name__ == "__main__":
