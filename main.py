@@ -1,13 +1,8 @@
 import asyncio
-from yarl import URL
 
 from modules.Extractor import FirefoxExtractor
-from modules.Parser import *
+from modules.KinopoiskWorker import SessionManager, KinopoiskWorker, PageRequestStats
 from modules.ShowData import ShowIDs
-from modules.Timer import AsyncTimer
-
-
-P_RANGE = (1750, 1800)
 
 
 async def main() -> None:
@@ -15,26 +10,16 @@ async def main() -> None:
     cookies = FirefoxExtractor.get_cookies("kinopoisk.ru")
 
     async with SessionManager(cookies=cookies) as sm:
-        sm.get(RequestOptions(URL("https://kinopoisk.ru"), sync_cookies=True))
-        parser = Parser(sm)
+        show_ids, stats_list = await KinopoiskWorker.bulk_get_page_shows(sm, 1700, 1800, concurrent=15)
 
-        async with AsyncTimer() as timer:
-            rr_dict = await parser.shows_from_page_range(*P_RANGE, concurrent=10)
-            time = timer.elapsed
+    anomalies = list(filter(lambda ps: ps.shows < 50, stats_list))
 
-    show_ids = ShowIDs()
-    success_count = 0
-    for rr in rr_dict.values():
-        if rr.result:
-            show_ids.films.update(rr.result.films)
-            show_ids.series.update(rr.result.series)
-            success_count += 1
+    if anomalies:
+        anomalies.sort(key=lambda ps: ps.page)
+        print(f"{len(anomalies)} pages were parsed partially:")
 
-    print(
-        f"Found {show_ids.total} shows ({len(show_ids.films)} films, {len(show_ids.series)} series) in {time:.3f}s"
-    )
-    print(f"Page success rate {(success_count / (P_RANGE[1] - P_RANGE[0] + 1) * 100):.1f}%")
-    print(f"Show success rate {(show_ids.total / (P_RANGE[1] - P_RANGE[0] + 1) * 2):.1f}%")
+        for ps in anomalies:
+            print(f"{ps.page}: {ps.shows} shows, {ps.size} content length")
 
 
 if __name__ == "__main__":
