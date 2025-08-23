@@ -2,9 +2,12 @@ import sys
 import logging
 
 
+from defines import GLOBAL_LOGGER_LEVEL
+
+
 class Logger:
 
-    def __init__(self, name: str, level=logging.DEBUG) -> None:
+    def __init__(self, name: str, level=GLOBAL_LOGGER_LEVEL) -> None:
         self._logger = logging.getLogger(name)
 
         if not self._logger.handlers:
