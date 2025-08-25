@@ -1,8 +1,7 @@
 import asyncio
 
 from modules.Extractor import FirefoxExtractor
-from modules.KinopoiskWorker import SessionManager, KinopoiskWorker, PageRequestStats
-from modules.ShowData import ShowIDs
+from modules.KinopoiskWorker import SessionManager, KinopoiskWorker
 
 
 async def main() -> None:

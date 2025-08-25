@@ -1,6 +1,6 @@
 import re
 
-from modules.ShowData import ShowIDs
+from modules.KinopoiskWorker import ShowIDs, ShowInfo
 
 
 SHOW_HREF_PATTERN = re.compile(r"/(film|series)/(\d+)/")
@@ -22,3 +22,7 @@ class Parser:
                 show_ids.series.add(sid)
         
         return show_ids
+    
+    @staticmethod
+    def get_show_info(content: str) -> ShowInfo:
+        pass

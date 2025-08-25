@@ -7,7 +7,7 @@ from modules.KinopoiskWorker import (
     SessionManager,
     Parser,
 )
-from modules.ShowData import ShowIDs
+from modules.KinopoiskWorker import ShowIDs
 from modules.Timer import AsyncTimer
 from modules.Logger import Logger
 

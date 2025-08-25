@@ -47,17 +47,3 @@ class PageRequestStats(RequestStats):
 
     page: int = field(default=0)
     shows: int = field(default=0)
-
-    # def __init__(self, base_stats: RequestStats, page: int, shows: int = 0) -> None:
-    #     self.status = base_stats.status
-    #     self.time = base_stats.time
-    #     self.size = base_stats.size
-    #     self.page = page
-    #     self.shows = shows
-
-
-# WIP
-# @dataclass
-# class ShowRequestStats(RequestStats):
-
-#     show_id: int
