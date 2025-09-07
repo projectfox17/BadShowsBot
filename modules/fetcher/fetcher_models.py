@@ -51,39 +51,48 @@ class PageParseStats(BaseModel):
     time: float = Field(default=0.0)
 
 
+class PageParseResult(BaseModel):
+    stats: PageParseStats
+    show_id_container: Optional[ShowIDContainer] = Field(default=None)
+
+
+class ShowParseStats(BaseModel):
+    show_id: int
+    time: float = Field(default=0.0)
+
+
+class ShowParseResult(BaseModel):
+    stats: ShowParseStats
+    show_info: Optional[ShowInfo] = Field(default=None)
+
+
 class PageFetchResult(BaseModel):
     request_stats: RequestStats
     parse_stats: PageParseStats
     show_id_container: Optional[ShowIDContainer] = Field(default=None)
 
 
-class ShowParseStats(BaseModel):
-    show_id: int
-    ...
-    time: float = Field(default=0.0)
-
-
-class ShowFetchResult(BaseModel):
-    request_stats: RequestStats
-    parse_stats: PageParseStats
-    show_info: Optional[ShowInfo] = Field(default=None)
-
-
 class BulkPageFetchResult(BaseModel):
-    results_by_page: Dict[int, Optional[PageFetchResult]] = Field(default_factory=dict)
+    results_by_page: Dict[int, PageParseResult] = Field(default_factory=dict)
     total_time: float = Field(default=0.0)
 
     @property
     def final_container(self) -> ShowIDContainer:
         container = ShowIDContainer()
         for result in self.results_by_page.values():
-            if result and result.show_id_container:
+            if result.show_id_container:
                 container.merge(result.show_id_container)
         return container
 
 
+class ShowFetchResult(BaseModel):
+    request_stats: RequestStats
+    parse_stats: ShowParseStats
+    show_info: Optional[ShowInfo] = Field(default=None)
+
+
 class BulkShowFetchResult(BaseModel):
-    results_by_id: Dict[int, Optional[ShowFetchResult]] = Field(default_factory=dict)
+    results_by_id: Dict[int, ShowParseResult] = Field(default_factory=dict)
     total_time: float = Field(default=0.0)
 
     @property
@@ -91,5 +100,5 @@ class BulkShowFetchResult(BaseModel):
         return [
             result.show_info
             for result in self.results_by_id.values()
-            if result and result.show_info
+            if result.show_info
         ]

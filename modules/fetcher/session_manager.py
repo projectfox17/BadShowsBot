@@ -92,6 +92,8 @@ class SessionManager:
                             n: v.value for n, v in response.cookies.items()
                         }
                         self.update_session(cookies=session_cookies)
+                    
+                    logger.debug(f"Requesting {options.method} {options.final_url} done")
 
                     return RequestResult(
                         content=content,

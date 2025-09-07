@@ -1,8 +1,9 @@
-import asyncio
+import asyncio, aiofiles
 from pprint import pprint
 
-from modules.fetcher import RequestOptions, RequestStats, RequestResult, SessionManager
+from modules.fetcher import RequestOptions, SessionManager
 from _modules.Extractor import FirefoxExtractor
+from modules.fetcher import Parser, ShowParseResult
 
 
 async def main():
@@ -10,13 +11,14 @@ async def main():
 
     async with SessionManager(cookies=kp_cookies) as sm:
         rr = await sm.request(
-            RequestOptions(
-                method="GET",
-                url="https://kinopoisk.ru/lists/movies",
-                params={"sort": "rating", "page": 1700},
-            )
+            RequestOptions(method="GET", url="https://www.kinopoisk.ru/series/5611838/")
         )
-    pprint(rr.request_stats.model_dump())
+    # pprint(rr.request_stats.model_dump())
+
+    spr: ShowParseResult = await Parser.parse_show(rr.content, 8420095, "FILM")
+
+    pprint(spr.show_info.model_dump())
+    # print(spr.show_info.description)
 
 
 if __name__ == "__main__":

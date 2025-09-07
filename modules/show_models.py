@@ -1,8 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from typing import Set, Optional, Literal
+from typing import Set, Optional, Literal, List
 
 
-BAD_SYMBOLS = []
+BAD_SYMBOLS = {"\n": " ", "\xa0": " "}
 
 
 class ShowIDContainer(BaseModel):
@@ -28,7 +28,9 @@ class ShowInfo(BaseModel):
     title: str
     show_type: Literal["FILM", "SERIES"]
     rating: float
+    rating_count: int
     description: str
+    genres: List[str]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -39,5 +41,7 @@ class ShowInfo(BaseModel):
 
     @field_validator("description", mode="before")
     def validate_description(cls, description: str):
-        # replace bad symbols
+        for s in BAD_SYMBOLS:
+            if s in description:
+                description = description.replace(s, BAD_SYMBOLS[s])
         return description
