@@ -72,18 +72,22 @@ class SessionManager:
     async def request(
         self, options: RequestOptions, attempts: int = 3
     ) -> RequestResult:
-        l_status = l_time = None
+        r_status = r_time = None
         for attempt in range(1, attempts + 1):
-            try:
-                logger.debug(
-                    f"Requesting {options.method} {options.final_url} attempt {attempt}"
-                )
-                async with AsyncTimer() as timer:
+            async with AsyncTimer() as timer:
+                try:
+                    logger.debug(
+                        f"Requesting {options.method} {options.final_url} attempt {attempt}"
+                    )
                     if options.method == "GET":
                         response = await self._session.get(url=options.final_url)
                     elif options.method == "POST":
                         response = await self._session.post(url=options.final_url)
-                    response_time = timer.lap()
+                    r_time = timer.lap()
+                    r_status = response.status
+
+                    assert r_status == 200, f"Request failed with status {r_status}"
+
                     content: str = await response.text()
 
                     if options.sync_cookies:
@@ -92,30 +96,32 @@ class SessionManager:
                             n: v.value for n, v in response.cookies.items()
                         }
                         self.update_session(cookies=session_cookies)
-                    
-                    logger.debug(f"Requesting {options.method} {options.final_url} done")
+
+                    logger.debug(
+                        f"Requesting {options.method} {options.final_url} done in {r_time:.3f}s"
+                    )
 
                     return RequestResult(
                         content=content,
                         request_stats=RequestStats(
                             options=options,
-                            status=response.status,
-                            time=response_time,
+                            status=r_status,
+                            time=r_time,
                             size=len(content),
                         ),
                     )
 
-            # except ClientError as ce:
-            #     logger.warning(f"ClientError on requesting {options}:\n{ce}")
-            except Exception as e:
-                logger.warning(f"{type(e)} on requesting {options}:\n{e}")
+                # except ClientError as ce:
+                #     logger.warning(f"ClientError on requesting {options}:\n{ce}")
+                except Exception as e:
+                    logger.warning(f"{type(e)} on requesting {options}:\n{e}")
 
         logger.error(f"Request {options} failed after {attempts} attempts")
         return RequestResult(
             request_stats=RequestStats(
                 options=options,
-                status=l_status or 0,
-                time=l_time or 0.0,
+                status=r_status or 0,
+                time=r_time or 0.0,
                 size=0,
             )
         )

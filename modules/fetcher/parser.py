@@ -57,12 +57,17 @@ class Parser:
     ) -> ShowParseResult:
         show_str = f"{show.type.value}/{show.id} " if show else ""
 
-        try:
-            async with AsyncTimer() as timer:
+        async with AsyncTimer() as timer:
+            try:
                 soup = get_soup(content, "lxml")
 
                 title_tag = find_tag(soup, ShowTagsParams.title, show_str)
-                title = title_tag.text.strip() if title_tag else None
+                title = None
+                if title_tag:
+                    title: str = title_tag.text.strip()
+                    year_match = re.search(r"\s\(\d{4}\)$", title)
+                    if year_match:
+                        title = title[:year_match.start()]
 
                 rating_tag = find_tag(soup, ShowTagsParams.rating)
                 rating = None
@@ -96,6 +101,8 @@ class Parser:
                     genre_tags = genre_box.find_all("a")
                     if genre_tags:
                         genres = [tag.text.strip() for tag in genre_tags]
+                        if "слова" in genres:
+                            genres.remove("слова")
                     else:
                         logger.warning(f"{show_str}Couldn't find genres in genre box")
 
@@ -105,13 +112,13 @@ class Parser:
                     field is None
                     for field in (title, rating, rating_count, description, genres)
                 ):
-                    raise LookupError(
-                        f"{show_str}Couldn't find some field values, check logs"
-                    )
+                    raise LookupError("Couldn't find some field values, check logs")
 
-        except Exception as e:
-            logger.error(f"{show_str}Failed parsing\n{e}")
-            return ShowParseResult(stats=ShowParseStats(), show_info=None)
+            except Exception as e:
+                logger.error(f"{show_str}Failed parsing\n{e}")
+                return ShowParseResult(
+                    stats=ShowParseStats(time=timer.lap()), show_info=None
+                )
 
         return ShowParseResult(
             stats=ShowParseStats(time=parse_time),

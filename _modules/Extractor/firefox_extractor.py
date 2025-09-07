@@ -35,7 +35,7 @@ class FirefoxExtractor:
         if ff_path is None:
             raise Exception("Couldn't determine Firefox path")
         
-        print(ff_path)
+        # print(ff_path)
 
         profiles_cfg_path: Path = ff_path / "profiles.ini"
         if not profiles_cfg_path.exists():
