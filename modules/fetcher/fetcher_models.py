@@ -1,8 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from typing import Optional, Dict, Literal
+from typing import Optional, Dict, Literal, List
 from yarl import URL
 
-from modules.show_models import ShowIDContainer, ShowInfo
+from modules.show_models import ShowIDContainer, ShowInfo, Show
 
 
 # Request input & output
@@ -42,11 +42,18 @@ class RequestResult(BaseModel):
     content: Optional[str] = Field(default=None)
 
 
-# Result outputs
+# Parsing params & outputs
+
+
+class TagParams(BaseModel):
+    name: str
+    attrs_list: List[Dict[str, str]]
+
+    # def __str__(self) -> str:
+    #     return f"{self.name}:\n{"\n".join(attrs for attrs in self.attrs_list)}"
 
 
 class PageParseStats(BaseModel):
-    page: int
     show_count: int
     time: float = Field(default=0.0)
 
@@ -57,13 +64,15 @@ class PageParseResult(BaseModel):
 
 
 class ShowParseStats(BaseModel):
-    show_id: int
     time: float = Field(default=0.0)
 
 
 class ShowParseResult(BaseModel):
     stats: ShowParseStats
     show_info: Optional[ShowInfo] = Field(default=None)
+
+
+# Fetcher output
 
 
 class PageFetchResult(BaseModel):
@@ -88,7 +97,7 @@ class BulkPageFetchResult(BaseModel):
 class ShowFetchResult(BaseModel):
     request_stats: RequestStats
     parse_stats: ShowParseStats
-    show_info: Optional[ShowInfo] = Field(default=None)
+    show: Optional[Show] = Field(default=None)
 
 
 class BulkShowFetchResult(BaseModel):

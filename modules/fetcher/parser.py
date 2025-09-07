@@ -1,9 +1,11 @@
 import re
-from bs4 import BeautifulSoup
-from typing import Literal
+from bs4 import BeautifulSoup, Tag
+from typing import Optional
+from enum import Enum
 
-from modules.show_models import ShowInfo, ShowIDContainer
+from modules.show_models import ShowInfo, ShowIDContainer, Show
 from modules.fetcher import (
+    TagParams,
     PageParseStats,
     PageParseResult,
     ShowParseStats,
@@ -11,14 +13,37 @@ from modules.fetcher import (
 )
 from modules.async_timer import AsyncTimer
 from modules.logger import Logger
-from defines import SOUP_SHOW_ARGS
 
 
 logger = Logger("Parser")
 
 
+class ShowTagsParams(Enum):
+    title = TagParams(
+        name="span", attrs_list=[{"data-tid": "75209b22"}, {"data-tid": "2da92aed"}]
+    )
+    rating = TagParams(name="span", attrs_list=[{"data-tid": "939058a8"}])
+    rating_count = TagParams(name="span", attrs_list=[{"class": "styles_count__mJ4RS"}])
+    description = TagParams(name="p", attrs_list=[{"class": "styles_paragraph__V0fA2"}])
+    genre_box = TagParams(name="div", attrs_list=[{"data-tid": "28726596"}])
+
+
 def get_soup(text: str, soup_parser: str = "html.parser") -> BeautifulSoup:
     return BeautifulSoup(text, soup_parser)
+
+
+def find_tag(
+    soup: BeautifulSoup, params: ShowTagsParams, show_str: Optional[str] = None
+) -> Optional[Tag]:
+    for attrs in params.value.attrs_list:
+        tag = soup.find(params.value.name, attrs=attrs)
+        if tag:
+            return tag
+    logger.warning(
+        f"{show_str if show_str else ""}Couldn't find {params.name} "
+        f"<{params.value.name}> with {params.value.attrs_list}"
+    )
+    return None
 
 
 class Parser:
@@ -28,66 +53,73 @@ class Parser:
 
     @staticmethod
     async def parse_show(
-        content: str, show_id: int, show_type: Literal["FILM", "SERIES"]
+        content: str, show: Optional[Show] = None, allow_partial: bool = False
     ) -> ShowParseResult:
-        async with AsyncTimer() as timer:
-            soup = get_soup(content, "lxml")
+        show_str = f"{show.type.value}/{show.id} " if show else ""
 
-            # Look for title
-            title_tag = soup.find(*SOUP_SHOW_ARGS["title"])
-            if not title_tag:
-                raise LookupError(
-                    f"{show_id}: Couldn't find title tag with {SOUP_SHOW_ARGS["title"]}"
-                )
-            title = title_tag.text
+        try:
+            async with AsyncTimer() as timer:
+                soup = get_soup(content, "lxml")
 
-            # Look for rating
-            rating_tag = soup.find(*SOUP_SHOW_ARGS["rating"])
-            if not rating_tag:
-                raise LookupError(
-                    f"{show_id}: Couldn't find rating tag with {SOUP_SHOW_ARGS["rating"]}"
-                )
-            rating = rating_tag.text
+                title_tag = find_tag(soup, ShowTagsParams.title, show_str)
+                title = title_tag.text.strip() if title_tag else None
 
-            # Look for rating count
-            rating_count_tag = soup.find(*SOUP_SHOW_ARGS["rating_count"])
-            if not rating_count_tag:
-                raise LookupError(
-                    f"{show_id}: Couldn't find rating count tag with {SOUP_SHOW_ARGS["rating_count"]}"
-                )
-            rating_count = rating_count_tag.text
-            rating_count = "".join(re.findall(r"(\d)\s?", rating_count))
+                rating_tag = find_tag(soup, ShowTagsParams.rating)
+                rating = None
+                if rating_tag:
+                    try:
+                        rating = float(rating_tag.text)
+                    except Exception as r_exc:
+                        logger.error(
+                            f"{show_str}Failed parsing rating value {rating_tag.text}:\n{r_exc}"
+                        )
 
-            # Look for description
-            description_tag = soup.find(*SOUP_SHOW_ARGS["description"])
-            if not description_tag:
-                raise LookupError(
-                    f"{show_id}: Couldn't find description tag with {SOUP_SHOW_ARGS["description"]}"
-                )
-            description = description_tag.text
+                rating_count_tag = find_tag(soup, ShowTagsParams.rating_count, show_str)
+                rating_count = None
+                if rating_count_tag:
+                    try:
+                        rating_count = int(
+                            "".join(re.findall(r"(\d)\s?", rating_count_tag.text))
+                        )
+                    except Exception as rc_exc:
+                        logger.error(
+                            f"{show_str}Failed parsing rating count value "
+                            f"{rating_count_tag.text}:\n{rc_exc}"
+                        )
 
-            # Look for genres
-            genre_box = soup.find(
-                SOUP_SHOW_ARGS["genres"][0], attrs=SOUP_SHOW_ARGS["genres"][1]
-            )
-            if not genre_box:
-                raise LookupError(
-                    f"{show_id}: Couldn't find genre tags with {SOUP_SHOW_ARGS["genres"]}"
-                )
-            genre_tags = genre_box.find_all("a")
-            genres = [tag.text for tag in genre_tags]
+                description_tag = find_tag(soup, ShowTagsParams.description, show_str)
+                description = description_tag.text.strip() if description_tag else None
 
-            parse_time = timer.lap()
+                genre_box = find_tag(soup, ShowTagsParams.genre_box, show_str)
+                genres = None
+                if genre_box:
+                    genre_tags = genre_box.find_all("a")
+                    if genre_tags:
+                        genres = [tag.text.strip() for tag in genre_tags]
+                    else:
+                        logger.warning(f"{show_str}Couldn't find genres in genre box")
+
+                parse_time = timer.lap()
+
+                if not allow_partial and any(
+                    field is None
+                    for field in (title, rating, rating_count, description, genres)
+                ):
+                    raise LookupError(
+                        f"{show_str}Couldn't find some field values, check logs"
+                    )
+
+        except Exception as e:
+            logger.error(f"{show_str}Failed parsing\n{e}")
+            return ShowParseResult(stats=ShowParseStats(), show_info=None)
 
         return ShowParseResult(
-            stats=ShowParseStats(show_id=show_id, time=parse_time),
+            stats=ShowParseStats(time=parse_time),
             show_info=ShowInfo(
-                show_id=show_id,
-                show_type=show_type,
-                title=title,
-                rating=rating,
-                rating_count=rating_count,
-                description=description,
-                genres=genres,
+                title=title or "",
+                rating=rating or 0.0,
+                rating_count=rating_count or 0,
+                description=description or "",
+                genres=genres or [],
             ),
         )
