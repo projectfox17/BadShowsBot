@@ -2,7 +2,7 @@ import sqlite3
 from pathlib import Path
 from configparser import ConfigParser
 
-from modules.Extractor import OSType, SystemInfo
+from _modules.Extractor import OSType, SystemInfo
 
 
 class FirefoxExtractor:
@@ -22,7 +22,7 @@ class FirefoxExtractor:
             homedrive: str = SystemInfo.get_homedrive()
             ff_path = (
                 Path(homedrive)
-                / "Users"
+                / "/Users"
                 / username
                 / "AppData"
                 / "Roaming"
@@ -34,6 +34,8 @@ class FirefoxExtractor:
 
         if ff_path is None:
             raise Exception("Couldn't determine Firefox path")
+        
+        print(ff_path)
 
         profiles_cfg_path: Path = ff_path / "profiles.ini"
         if not profiles_cfg_path.exists():

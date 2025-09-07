@@ -1,9 +1,2 @@
-from modules.fetcher.request_classes import RequestOptions, RequestStats, RequestResult
-
-from modules.fetcher.result_classes import (
-    RatingPageParseStats,
-    RatingPageFetchResult,
-    BulkRatingPageFetchResult,
-    ShowInfoFetchResult,
-    BulkShowInfoFetchResult,
-)
+from modules.fetcher.fetcher_models import *
+from modules.fetcher.session_manager import SessionManager

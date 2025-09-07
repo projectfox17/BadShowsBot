@@ -2,7 +2,7 @@ import os
 import getpass
 import platform
 
-from modules.Extractor import OSType
+from _modules.Extractor import OSType
 
 
 class SystemInfo:

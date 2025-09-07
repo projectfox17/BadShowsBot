@@ -1,24 +1,22 @@
 import asyncio
+from pprint import pprint
 
-from modules.Extractor import FirefoxExtractor
-from modules.KinopoiskWorker import SessionManager, KinopoiskWorker
+from modules.fetcher import RequestOptions, RequestStats, RequestResult, SessionManager
+from _modules.Extractor import FirefoxExtractor
 
 
-async def main() -> None:
+async def main():
+    kp_cookies = FirefoxExtractor.get_cookies("kinopoisk.ru")
 
-    cookies = FirefoxExtractor.get_cookies("kinopoisk.ru")
-
-    async with SessionManager(cookies=cookies) as sm:
-        show_ids, stats_list = await KinopoiskWorker.bulk_get_page_shows(sm, 1700, 1800, concurrent=15)
-
-    anomalies = list(filter(lambda ps: ps.shows < 50, stats_list))
-
-    if anomalies:
-        anomalies.sort(key=lambda ps: ps.page)
-        print(f"{len(anomalies)} pages were parsed partially:")
-
-        for ps in anomalies:
-            print(f"{ps.page}: {ps.shows} shows, {ps.size} content length")
+    async with SessionManager(cookies=kp_cookies) as sm:
+        rr = await sm.request(
+            RequestOptions(
+                method="GET",
+                url="https://kinopoisk.ru/lists/movies",
+                params={"sort": "rating", "page": 1700},
+            )
+        )
+    pprint(rr.request_stats.model_dump())
 
 
 if __name__ == "__main__":

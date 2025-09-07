@@ -2,7 +2,6 @@ import time
 
 
 class AsyncTimer:
-
     async def __aenter__(self):
         self.start = time.perf_counter()
         return self
