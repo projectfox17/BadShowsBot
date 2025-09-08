@@ -103,7 +103,7 @@ class SessionManager:
 
                     return RequestResult(
                         content=content,
-                        request_stats=RequestStats(
+                        stats=RequestStats(
                             options=options,
                             status=r_status,
                             time=r_time,
@@ -118,7 +118,7 @@ class SessionManager:
 
         logger.error(f"Request {options} failed after {attempts} attempts")
         return RequestResult(
-            request_stats=RequestStats(
+            stats=RequestStats(
                 options=options,
                 status=r_status or 0,
                 time=r_time or 0.0,

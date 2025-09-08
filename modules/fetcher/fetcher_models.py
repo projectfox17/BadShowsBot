@@ -38,7 +38,7 @@ class RequestStats(BaseModel):
 
 
 class RequestResult(BaseModel):
-    request_stats: RequestStats
+    stats: RequestStats
     content: Optional[str] = Field(default=None)
 
 
@@ -81,7 +81,7 @@ class PageFetchResult(BaseModel):
     show_id_container: Optional[ShowIDContainer] = Field(default=None)
 
 
-class BulkPageFetchResult(BaseModel):
+class BatchPageFetchResult(BaseModel):
     results_by_page: Dict[int, PageParseResult] = Field(default_factory=dict)
     total_time: float = Field(default=0.0)
 
@@ -100,12 +100,12 @@ class ShowFetchResult(BaseModel):
     show: Optional[Show] = Field(default=None)
 
 
-class BulkShowFetchResult(BaseModel):
-    results_by_id: Dict[int, ShowParseResult] = Field(default_factory=dict)
+class BatchShowFetchResult(BaseModel):
+    results_by_id: Dict[int, ShowFetchResult] = Field(default_factory=dict)
     total_time: float = Field(default=0.0)
 
     @property
-    def results_list(self) -> list[ShowInfo]:
+    def results_list(self) -> list[Show]:
         return [
             result.show_info
             for result in self.results_by_id.values()
