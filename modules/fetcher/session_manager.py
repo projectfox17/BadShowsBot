@@ -1,4 +1,6 @@
 from aiohttp import ClientSession, CookieJar, ClientError
+from time import sleep
+from random import randint
 from typing import Optional
 
 from modules.fetcher import RequestOptions, RequestStats, RequestResult
@@ -74,6 +76,8 @@ class SessionManager:
     ) -> RequestResult:
         r_status = r_time = None
         for attempt in range(1, attempts + 1):
+            if attempt > 1:
+                sleep(2 * attempt)
             async with AsyncTimer() as timer:
                 try:
                     logger.debug(

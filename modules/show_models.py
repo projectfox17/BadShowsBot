@@ -6,24 +6,6 @@ from typing import Set, Optional, List
 BAD_SYMBOLS = {"\n": " ", "\xa0": " "}
 
 
-class ShowIDContainer(BaseModel):
-    films: Set[int] = Field(default_factory=set)
-    series: Set[int] = Field(default_factory=set)
-
-    def merge(self, other: "ShowIDContainer"):
-        self.merge_fields(films=other.films, series=other.series)
-
-    def merge_fields(
-        self, films: Optional[Set[int]] = None, series: Optional[Set[int]] = None
-    ):
-        self.films.update(films or set())
-        self.series.update(films or set())
-
-    @property
-    def total_count(self) -> int:
-        return len(self.films) + len(self.series)
-
-
 class ShowType(Enum):
     FILM = "film"
     SERIES = "series"
@@ -71,3 +53,26 @@ class Show(BaseModel):
     @field_serializer
     def serialize_type(self, v: ShowType):
         return v.value
+
+
+class ShowIDContainer(BaseModel):
+    films: Set[int] = Field(default_factory=set)
+    series: Set[int] = Field(default_factory=set)
+
+    def merge(self, other: "ShowIDContainer"):
+        self.merge_fields(films=other.films, series=other.series)
+
+    def merge_fields(
+        self, films: Optional[Set[int]] = None, series: Optional[Set[int]] = None
+    ):
+        self.films.update(films or set())
+        self.series.update(films or set())
+
+    def make_show_list(self) -> list[Show]:
+        return [Show(id=film_id, type=ShowType.FILM) for film_id in self.films] + [
+            Show(id=series_id, type=ShowType.SERIES) for series_id in self.series
+        ]
+
+    @property
+    def total_count(self) -> int:
+        return len(self.films) + len(self.series)

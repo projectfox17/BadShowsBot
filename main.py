@@ -1,6 +1,6 @@
 import asyncio
 from pprint import pprint
-from time import sleep
+import aiofiles
 
 from modules.extractor import FFExtractor
 from modules.fetcher import SessionManager, Fetcher
@@ -11,25 +11,20 @@ async def main():
     kp_cookies = FFExtractor.get_cookies("kinopoisk.ru")
 
     async with SessionManager(cookies=kp_cookies) as sm:
-        page_fetch = await Fetcher.fetch_page(sm, 1)
+        page_fetch = await Fetcher.fetch_page(sm, 1700)
 
-        shows: list[Show] = []
-        for film_id in page_fetch.show_id_container.films:
-            show_fetch = await Fetcher.fetch_show(
-                sm, film_id, ShowType.FILM, allow_partial=True
-            )
-            shows.append(show_fetch.show)
-            sleep(2)
-        for series_id in page_fetch.show_id_container.films:
-            show_fetch = await Fetcher.fetch_show(
-                sm, series_id, ShowType.SERIES, allow_partial=True
-            )
-            sleep(2)
-            shows.append(show_fetch.show)
+        shows_fetch = await Fetcher.batch_fetch_shows(
+            sm, page_fetch.show_id_container.make_show_list()
+        )
 
-    for s in shows:
-        if s:
-            pprint(s.model_dump())
+    async with aiofiles.open("dump.json", mode="w", encoding="UTF-8") as f:
+        await f.write("{\n")
+        await f.writelines(
+            f"\"{r.show.id}\": {r.show.model_dump_json()},"
+            for r in shows_fetch.results_by_id.values()
+            if r.show.info
+        )
+        await f.write("}")
 
 
 if __name__ == "__main__":

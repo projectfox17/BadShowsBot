@@ -2,6 +2,8 @@
 /logs/*
 !/logs/.gitkeep
 
+dump.*
+
 # Virtual envs
 .env
 .venv

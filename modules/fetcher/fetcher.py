@@ -65,37 +65,33 @@ class Fetcher:
     @staticmethod
     async def fetch_show(
         sm: SessionManager,
-        show_id: int,
-        show_type: ShowType,
+        dummy_show: Show,
         attempts: int = 3,
         allow_partial: bool = False,
     ) -> ShowFetchResult:
+        show_str = f"{dummy_show.type.value}/{dummy_show.id}"
         try:
             request_result = await sm.request(
                 RequestOptions(
                     method="GET",
-                    url=f"{KP_SHOW_URL_BASE}/{show_type.value}/{show_id}",
+                    url=f"{KP_SHOW_URL_BASE}/{dummy_show.type.value}/{dummy_show.id}",
                 ),
                 attempts,
             )
             if request_result.content is None:
-                logger.error(
-                    f"Show {show_type.name} {show_id} fetch failed on requesting, check logs"
-                )
+                logger.error(f"Show {show_str} fetch failed on requesting, check logs")
                 return ShowFetchResult(
                     request_stats=request_result.stats,
                     parse_stats=ShowParseStats(time=0.0),
                     show=None,
                 )
 
-            show = Show(id=show_id, type=show_type)
+            show = dummy_show.model_copy()
             parse_result = await Parser.parse_show(
                 request_result.content, show, allow_partial=allow_partial
             )
             if parse_result.show_info is None:
-                logger.error(
-                    f"Show {show_type.name} {show_id} fetch failed on parsing, check logs"
-                )
+                logger.error(f"Show {show_str} fetch failed on parsing, check logs")
             show.info = parse_result.show_info
 
         except Exception as e:
@@ -109,4 +105,36 @@ class Fetcher:
             request_stats=request_result.stats,
             parse_stats=parse_result.stats,
             show=show,
+        )
+
+    @staticmethod
+    async def batch_fetch_shows(
+        sm: SessionManager,
+        dummy_show_list: list[Show],
+        concurrent: int = 5,
+        attempts: int = 3,
+        allow_partial: bool = False,
+    ) -> BatchShowFetchResult:
+
+        async def show_task(
+            sem: Semaphore,
+            dummy_show,
+            sm=sm,
+            attempts=attempts,
+            allow_partial=allow_partial,
+        ) -> ShowFetchResult:
+            async with sem:
+                result = await Fetcher.fetch_show(
+                    sm, dummy_show, attempts, allow_partial
+                )
+                return result
+
+        sem = Semaphore(concurrent)
+        tasks = [show_task(sem, dummy_show) for dummy_show in dummy_show_list]
+
+        results = await gather(*tasks)
+        t_time = sum([r.request_stats.time + r.parse_stats.time for r in results])
+
+        return BatchShowFetchResult(
+            results_by_id={r.show.id: r for r in results if r.show}, total_time=t_time
         )
