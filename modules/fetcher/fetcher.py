@@ -39,6 +39,7 @@ class Fetcher:
             if request_result.content is None:
                 logger.error(f"Page {page_n} fetch failed on requesting, check logs")
                 return PageFetchResult(
+                    page=page_n,
                     request_stats=request_result.stats,
                     parse_stats=PageParseStats(show_count=0, time=0.0),
                     show_id_container=None,
@@ -51,15 +52,39 @@ class Fetcher:
         except Exception as e:
             logger.error(f"Failed fetching page {page_n}\n{e}")
             return PageFetchResult(
+                page=page_n,
                 request_stats=request_result.stats,
                 parse_stats=...,
                 show_id_container=None,
             )
 
         return PageFetchResult(
+            page=page_n,
             request_stats=request_result.stats,
             parse_stats=parse_result.stats,
             show_id_container=parse_result.show_id_container,
+        )
+
+    @staticmethod
+    async def batch_fetch_pages(
+        sm: SessionManager, page_list: list[int], concurrent=5, attempts=3
+    ) -> BatchPageFetchResult:
+
+        async def page_task(
+            sem: Semaphore, page: int, sm=sm, attempts=attempts
+        ) -> PageFetchResult:
+            async with sem:
+                result = await Fetcher.fetch_page(sm, page, attempts)
+                return result
+
+        sem = Semaphore(concurrent)
+        tasks = [page_task(sem, page) for page in page_list]
+
+        results = await gather(*tasks)
+        t_time = sum([r.request_stats.time + r.parse_stats.time for r in results])
+
+        return BatchPageFetchResult(
+            results_by_page={r.page: r for r in results}, total_time=t_time
         )
 
     @staticmethod
@@ -118,7 +143,7 @@ class Fetcher:
 
         async def show_task(
             sem: Semaphore,
-            dummy_show,
+            dummy_show: Show,
             sm=sm,
             attempts=attempts,
             allow_partial=allow_partial,

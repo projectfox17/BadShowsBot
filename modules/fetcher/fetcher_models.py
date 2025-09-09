@@ -76,13 +76,14 @@ class ShowParseResult(BaseModel):
 
 
 class PageFetchResult(BaseModel):
+    page: int
     request_stats: RequestStats
     parse_stats: PageParseStats
     show_id_container: Optional[ShowIDContainer] = Field(default=None)
 
 
 class BatchPageFetchResult(BaseModel):
-    results_by_page: Dict[int, PageParseResult] = Field(default_factory=dict)
+    results_by_page: Dict[int, PageFetchResult] = Field(default_factory=dict)
     total_time: float = Field(default=0.0)
 
     @property
