@@ -7,7 +7,7 @@ from defines import GLOBAL_LOGGER_LEVEL
 
 class Logger:
 
-    def __init__(self, name: str, level=GLOBAL_LOGGER_LEVEL) -> None:
+    def __init__(self, name: str, level=GLOBAL_LOGGER_LEVEL):
         self._logger = logging.getLogger(name)
 
         if not self._logger.handlers:
@@ -25,17 +25,17 @@ class Logger:
             self._logger.addHandler(stdout_sh)
             self._logger.propagate = False
 
-    def debug(self, msg, *args, **kwargs) -> None:
+    def debug(self, msg, *args, **kwargs):
         self._logger.debug(msg, *args, **kwargs)
 
-    def info(self, msg, *args, **kwargs) -> None:
+    def info(self, msg, *args, **kwargs):
         self._logger.info(msg, *args, **kwargs)
 
-    def warning(self, msg, *args, **kwargs) -> None:
+    def warning(self, msg, *args, **kwargs):
         self._logger.warning(msg, *args, **kwargs)
 
-    def error(self, msg, *args, **kwargs) -> None:
+    def error(self, msg, *args, **kwargs):
         self._logger.error(msg, *args, **kwargs)
 
-    def critical(self, msg, *args, **kwargs) -> None:
+    def critical(self, msg, *args, **kwargs):
         self._logger.critical(msg, *args, **kwargs)
