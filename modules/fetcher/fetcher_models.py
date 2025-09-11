@@ -13,7 +13,7 @@ class RequestOptions(BaseModel):
     url: URL
     method: Literal["GET", "POST"]
     params: Dict[str, any] = Field(default_factory=dict)
-    sync_cookies: bool = Field(default=False)
+    sync_config: bool = Field(default=False)
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

@@ -3,6 +3,7 @@
 !/logs/.gitkeep
 
 dump.*
+*session_config.json
 
 # Virtual envs
 .env

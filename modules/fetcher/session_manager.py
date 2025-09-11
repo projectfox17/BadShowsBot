@@ -1,7 +1,7 @@
 from aiohttp import ClientSession, CookieJar, ClientError
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from time import sleep
-from random import randint
-from typing import Optional
+from typing import Optional, Dict
 
 from modules.fetcher import RequestOptions, RequestStats, RequestResult
 from modules.async_timer import AsyncTimer
@@ -11,18 +11,25 @@ from modules.logger import Logger
 logger = Logger("Session Manager")
 
 
+class SessionConfig(BaseModel):
+    cookies: Dict[str, str] = Field(default_factory=dict)
+    headers: Dict[str, str] = Field(default_factory=dict)
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("cookies", "headers", mode="before")
+    def validate_values(cls, d: Dict):
+        return {k: str(v) for k, v in d.items()}
+
+
 class SessionManager:
     def __init__(
         self,
-        headers: Optional[dict[str, str]] = None,
-        cookies: Optional[dict[str, str]] = None,
+        config: SessionConfig,
     ):
         self._session = ClientSession(cookie_jar=CookieJar())
         logger.debug("Session initialized")
-
-        self._headers = headers or {}
-        self._cookies = cookies or {}
-        self.update_session(headers=self._headers, cookies=self._cookies)
+        self.config = config
 
     async def close_session(self):
         if self._session and not self._session.closed:
@@ -36,7 +43,7 @@ class SessionManager:
     async def __aexit__(self, *args):
         await self.close_session()
 
-    def update_session(
+    def update_config(
         self,
         headers: Optional[dict[str, str]] = None,
         cookies: Optional[dict[str, str]] = None,
@@ -44,36 +51,39 @@ class SessionManager:
         keep_old: bool = True,
     ):
         if headers:
-            logger.debug(f"Updating session headers")
             if not keep_old:
-                self._headers.clear()
-
+                self.headers.clear()
+            logger.debug(f"Updating config headers")
             upd_count = 0
             for k, v in headers.items():
-                if not overwrite and k in self._headers:
+                if not overwrite and k in self.config.headers:
                     continue
-                self._headers[str(k)] = str(v)
+                self.config.headers[str(k)] = str(v)
                 upd_count += 1
-            self._session.headers.update(self._headers)
-            logger.debug(f"Updated {upd_count} headers, total {len(self._headers)}")
+            logger.debug(
+                f"Updated {upd_count} headers, total {len(self.config.headers)}"
+            )
+            self._session.headers.update(self.config.headers)
 
         if cookies:
-            logger.debug(f"Updating session cookies")
             if not keep_old:
-                self._cookies.clear()
-
+                self.cookies.clear()
+            logger.debug(f"Updating config cookies")
             upd_count = 0
             for k, v in cookies.items():
-                if not overwrite and k in self._cookies:
+                if not overwrite and k in self.config.cookies:
                     continue
-                self._cookies[str(k)] = str(v)
+                self.config.cookies[str(k)] = str(v)
                 upd_count += 1
-            self._session.cookie_jar.update_cookies(self._cookies)
-            logger.debug(f"Updated {upd_count} cookies, total {len(self._cookies)}")
+            logger.debug(
+                f"Updated {upd_count} cookies, total {len(self.config.cookies)}"
+            )
+            self._session.cookie_jar.update_cookies(self.config.cookies)
 
     async def request(
         self, options: RequestOptions, attempts: int = 3
     ) -> RequestResult:
+
         r_status = r_time = None
         for attempt in range(1, attempts + 1):
             if attempt > 1:
@@ -94,12 +104,12 @@ class SessionManager:
 
                     content: str = await response.text()
 
-                    if options.sync_cookies:
+                    if options.sync_config:
                         logger.debug(f"Syncing cookies after {options.final_url}")
                         session_cookies: dict[str, str] = {
                             n: v.value for n, v in response.cookies.items()
                         }
-                        self.update_session(cookies=session_cookies)
+                        self.update_config(cookies=session_cookies)
 
                     logger.debug(
                         f"Requesting {options.method} {options.final_url} done in {r_time:.3f}s"
@@ -118,7 +128,7 @@ class SessionManager:
                 # except ClientError as ce:
                 #     logger.warning(f"ClientError on requesting {options}:\n{ce}")
                 except Exception as e:
-                    logger.warning(f"{type(e)} on requesting {options}:\n{e}")
+                    logger.warning(f"Exception on requesting {options}:\n{e}")
 
         logger.error(f"Request {options} failed after {attempts} attempts")
         return RequestResult(
