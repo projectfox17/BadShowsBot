@@ -1,13 +1,20 @@
 import sys
 import logging
+from enum import Enum
+from modules.utils import DirectEnumMeta
 
 
-from defines import GLOBAL_LOGGER_LEVEL
+class LoggerLevel(Enum, metaclass=DirectEnumMeta):
+    DEBUG = logging.DEBUG
+    INFO = logging.INFO
+    WARNING = logging.WARNING
+    ERROR = logging.ERROR
+    CRITICAL = logging.CRITICAL
 
 
 class Logger:
 
-    def __init__(self, name: str, level=GLOBAL_LOGGER_LEVEL):
+    def __init__(self, name: str, level=LoggerLevel.DEBUG):
         self._logger = logging.getLogger(name)
 
         if not self._logger.handlers:

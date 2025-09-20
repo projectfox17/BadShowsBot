@@ -1,38 +1,26 @@
 import asyncio
 from pprint import pprint
 
-from modules.extractor import FFExtractor
-from modules.storage import PROJECT_STORAGE_NODES
-from modules.fetcher import SessionConfig, SessionManager, RequestOptions
 from modules.logger import Logger
-from defines import DEFAULT_HEADERS
+from modules.storage import NodeType, NodeSpec, Storage
 
 
 logger = Logger("Main")
 
 
 async def main():
-    # fb_sc_file = PROJECT_STORAGE_NODES["FB_SESSION_CONFIG"]
-    sc_file = PROJECT_STORAGE_NODES["SESSION_CONFIG"]
-
-    # if sc_file.runtime_created:
-    #     logger.warning("Session config file was not present, loading fallback config")
-    #     sc = SessionConfig.model_validate_json(await fb_sc_file.a_read())
-    # else:
-    #     sc = SessionConfig.model_validate_json(await sc_file.a_read())
-
-    sm = SessionManager(config=SessionConfig(cookies=FFExtractor.get_cookies("kinopoisk.ru"), headers=DEFAULT_HEADERS))
-    await sm.request(
-        RequestOptions(
-            url="https://kinopoisk.ru",
-            method="GET",
-            # params={"sort": "rating", "page": 1},
-            sync_config=True,
-        )
+    st = Storage("BadShowsBot")
+    st.generate_nodes(
+        [
+            NodeSpec(
+                name="aboba", type=NodeType.FILE, relative_path="config/aboba.txt"
+            ),
+            NodeSpec(
+                name="obema", type=NodeType.FILE, relative_path="config/obema.json"
+            ),
+        ]
     )
-    await sm.close_session()
-
-    await sc_file.a_write(sm.config.model_dump_json(indent=4))
+    await st.nodes_dump_json(st.root_path / "popa.json")
 
 
 if __name__ == "__main__":
