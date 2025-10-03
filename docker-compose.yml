@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: badshows_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: badshows
+      POSTGRES_PASSWORD: badshows
+      POSTGRES_DB: badshows_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  db_service:
+    build:
+      context: .
+      dockerfile: services/db_service/Dockerfile
+    container_name: db_service
+    depends_on:
+      - postgres
+    environment:
+      - DB_URL=postgresql+asyncpg://badshows:badshows@postgres:5432/badshows_db
+    ports:
+      - "8001:8000"
+
+  snatcher_service:
+    build:
+      context: .
+      dockerfile: services/snatcher_service/Dockerfile
+    container_name: snatcher_service
+    depends_on:
+      - db_service
+    ports:
+      - "8002:8000"
+
+volumes:
+  pgdata:

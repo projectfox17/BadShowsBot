@@ -1,0 +1,10 @@
+.venv/
+.vscode/
+
+config/*
+!config/.gitkeep
+logs/*
+!config/.gitkeep
+
+__pycache__
+*.egg-info
