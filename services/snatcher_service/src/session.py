@@ -2,11 +2,31 @@ from aiohttp import ClientSession, CookieJar
 from time import sleep
 from random import randint
 from yarl import URL
-from typing import Optional, Literal
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, Literal, Dict
 
 from common.logger import Logger
 from common.timer import Timer
-from src.models import SessionConfig, RequestResult
+
+
+class SessionConfig(BaseModel):
+    """
+    Хранилище cookies и headers для SessionManager
+    """
+
+    cookies: Dict[str, str] = Field(default_factory=dict)
+    headers: Dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("cookies", "headers", mode="before")
+    def validate_values(cls, d: Dict) -> Dict[str, str]:
+        return {k: str(v) for k, v in d.items()}
+
+
+class RequestResult(BaseModel):
+    content: Optional[str]
+    url: str
+    status: int
+    time: float
 
 
 logger = Logger("SessionManager")
@@ -98,7 +118,7 @@ class SessionManager:
             timer = Timer()
             try:
                 logger.debug(
-                    f"{method} {url}"
+                    f"Requesting {method} {url}"
                     + (f", attempt {attempt}" if attempt > 1 else "")
                     + "..."
                 )
@@ -120,11 +140,11 @@ class SessionManager:
                     new_cookies = {n: v.value for n, v in response.cookies.items()}
                     self.update_config(cookies=new_cookies)
 
-                logger.debug(f"Done {method} {url} in {time:.3f}s")
+                logger.debug(f"Done requesting {method} {url} in {time:.3f}s")
                 return RequestResult(content=content, url=url, time=time, status=status)
 
             except Exception as e:
-                logger.warning(f"Error on {method} {url}: {e}")
+                logger.warning(f"Error on requesting {method} {url}: {e}")
 
-        logger.error(f"Failed {method} {url}")
+        logger.error(f"Failed requesting {method} {url}")
         return RequestResult(content=None, url=url, time=time, status=status)

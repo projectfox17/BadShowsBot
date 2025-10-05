@@ -1,81 +1,117 @@
 from asyncio import Semaphore, gather
-from typing import Optional, Literal
+from pydantic import BaseModel, field_serializer
+from typing import Optional, List
 
 from common.logger import Logger
-from common.models import Show, ShowIDSets
-from src.session import SessionManager
+from src.session import SessionManager, RequestResult
+from common.show_models import ShowIdentifier, ShowModel
 from src.parser import Parser
-from src.models import RequestResult, SnatchResult
 
 PAGE_URL_BASE = "https://www.kinopoisk.ru/lists/movies"
 SHOW_URL_BASE = "https://www.kinopoisk.ru"
+
+
+class SnatchResult(BaseModel):
+    # payload: Optional[ShowModel | List[ShowIdentifier]]
+    request_result: RequestResult
+
+    @field_serializer("request_result")
+    def serialize_rr_clean(self, request_result: RequestResult, _info):
+        return request_result.model_dump(exclude={"content"})
+
+
+class SnatchSIDsResult(SnatchResult):
+    identifier_list: Optional[List[ShowIdentifier]]
+
+
+class SnatchShowResult(SnatchResult):
+    show: Optional[ShowModel]
+
+
 logger = Logger("Snatcher")
 
 
 class Snatcher:
-    def __init__(self, sm: SessionManager):
-        self.sm = sm
-        logger.info("Snatcher up")
+    @staticmethod
+    async def snatch_identifiers(sm: SessionManager, page: int) -> SnatchSIDsResult:
+        """
+        Возвращает список `ShowIdentifier` и статистику запроса
+        """
 
-    async def snatch_page_ids(self, page: int) -> SnatchResult:
-        reqr = await self.sm.request(
+        request_result = await sm.request(
             PAGE_URL_BASE, method="GET", params={"sort": "rating", "page": page}
         )
-        if reqr.content is None:
+        if request_result.content is None:
             logger.error(f"Failed requesting page {page}")
-            return SnatchResult(payload=None, request_result=reqr)
+            return SnatchResult(payload=None, request_result=request_result)
 
-        show_ids: Optional[ShowIDSets] = await Parser.parse_page(reqr.content, page)
-        if show_ids is None:
+        sid_list: Optional[list[ShowIdentifier]] = await Parser.parse_page(
+            request_result.content, page
+        )
+        if sid_list is None:
             logger.error(f"Failed parsing page {page}")
-            return SnatchResult(payload=None, request_result=reqr)
-        return SnatchResult(payload=show_ids, request_result=reqr)
+            return SnatchSIDsResult(identifier_list=None, request_result=request_result)
 
-    async def batch_snatch_page_ids(
-        self, page_list: list[int], concurrent: int = 5
-    ) -> list[SnatchResult]:
+        return SnatchSIDsResult(identifier_list=sid_list, request_result=request_result)
 
-        async def task(sem: Semaphore, page: int) -> SnatchResult:
+    @staticmethod
+    async def batch_snatch_identifiers(
+        sm: SessionManager, page_list: list[int], concurrent: int = 5
+    ) -> list[SnatchSIDsResult]:
+        """
+        Параллельно запускает `snatch_identifiers()`,
+        возвращает список списков `ShowIdentifier` и статистики запросов
+        """
+
+        async def task(sem: Semaphore, page: int) -> SnatchSIDsResult:
             async with sem:
-                return await self.snatch_page_ids(page)
+                return await Snatcher.snatch_identifiers(sm, page)
 
         sem = Semaphore(concurrent)
         tasks = [task(sem, page) for page in page_list]
-        
+
         return await gather(*tasks)
 
+    @staticmethod
     async def snatch_show(
-        self, show_id: int, show_type: Literal["film", "series"]
-    ) -> SnatchResult:
-        reqr = await self.sm.request(
-            f"{SHOW_URL_BASE}/{show_type}/{show_id}", method="GET"
+        sm: SessionManager, identifier: ShowIdentifier
+    ) -> SnatchShowResult:
+        """
+        Возвращает готовый объект `ShowModel` и статистику запроса
+        """
+        request_result = await sm.request(
+            f"{SHOW_URL_BASE}/{identifier.type.value}/{identifier.id}", method="GET"
         )
-        if reqr.content is None:
-            logger.error(f"Failed requesting {show_type} {show_id}")
-            return SnatchResult(payload=None, request_result=reqr)
+        if request_result.content is None:
+            logger.error(f"Failed requesting {identifier}")
+            return SnatchShowResult(show=None, request_result=request_result)
 
-        show_info = await Parser.parse_show(
-            reqr.content, show_id, show_type, allow_partial=False
+        show_details = await Parser.parse_show(
+            request_result.content, identifier, allow_partial=False
         )
-        
-        if show_info is None:
-            logger.error(f"Failed parsing {show_type} {show_id}")
-            return SnatchResult(payload=None, request_result=reqr)
-        
-        return SnatchResult(payload=Show(id=show_id, type=show_type, info=show_info), request_result=reqr)
 
+        if show_details is None:
+            logger.error(f"Failed parsing {identifier}")
+            return SnatchShowResult(show=None, request_result=request_result)
+
+        return SnatchShowResult(
+            show=ShowModel(identifier=identifier, details=show_details),
+            request_result=request_result,
+        )
+
+    @staticmethod
     async def batch_snatch_shows(
-        self, show_ids: ShowIDSets, concurrent: int = 5
-    ) -> list[SnatchResult]:
+        sm: SessionManager, identifier_list: list[ShowIdentifier], concurrent: int = 5
+    ) -> list[SnatchShowResult]:
+        """
+        Параллельно запускает `snatch_show()`,
+        возвращает список `ShowModel` и статистики запросов
+        """
 
-        async def task(
-            sem: Semaphore, show_id: int, show_type: Literal["film", "series"]
-        ) -> SnatchResult:
+        async def task(sem: Semaphore, identifier: ShowIdentifier) -> SnatchShowResult:
             async with sem:
-                return await self.snatch_show(show_id, show_type)
+                return await Snatcher.snatch_show(sm, identifier)
 
         sem = Semaphore(concurrent)
-        tasks = [task(sem, film_id, "film") for film_id in show_ids.films] + [
-            task(sem, series_id, "series") for series_id in show_ids.series
-        ]
-        return [res for res in await gather(*tasks) if res.payload]
+        tasks = [task(sem, sid) for sid in identifier_list]
+        return await gather(*tasks)

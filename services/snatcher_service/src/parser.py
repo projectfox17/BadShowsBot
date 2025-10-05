@@ -1,35 +1,40 @@
 import re
 from bs4 import BeautifulSoup, Tag
-from typing import Optional, Literal
+from typing import Optional
 from enum import Enum
 
 from common.logger import Logger
-from common.models import ShowInfo, ShowIDSets
-from src.models import TagDescriptor
+from common.show_models import ShowIdentifier, ShowDetails
 
 
-logger = Logger("Parser")
+REPLACE = {"\n": " ", "\xa0": " "}
 
 
-class KinopoiskTags(Enum):
-    title = TagDescriptor(
-        name="span", attrs_list=[{"data-tid": "75209b22"}, {"data-tid": "2da92aed"}]
-    )
-    rating = TagDescriptor(name="span", attrs_list=[{"data-tid": "939058a8"}])
-    rating_count = TagDescriptor(
-        name="span", attrs_list=[{"class": "styles_count__mJ4RS"}]
-    )
-    description = TagDescriptor(
-        name="p", attrs_list=[{"class": "styles_paragraph__V0fA2"}]
-    )
-    genre_box = TagDescriptor(name="div", attrs_list=[{"data-tid": "28726596"}])
+class TagDescriptor:
+    def __init__(self, name: str, attrs_list: list[dict[str, str]]):
+        self.name = name
+        self.attrs_list = attrs_list
 
-    page_show_box = TagDescriptor(
+
+class KPTags(Enum):
+    PShowBox = TagDescriptor(
         name="div", attrs_list=[{"class": "styles_content__2fRe6"}]
     )
-    page_show_link = TagDescriptor(
+    PShowLink = TagDescriptor(
         name="a", attrs_list=[{"class": "base-movie-main-info_link__K161e"}]
     )
+
+    STitle = TagDescriptor(
+        name="span", attrs_list=[{"data-tid": "75209b22"}, {"data-tid": "2da92aed"}]
+    )
+    SRating = TagDescriptor(name="span", attrs_list=[{"data-tid": "939058a8"}])
+    SRatingCount = TagDescriptor(
+        name="span", attrs_list=[{"class": "styles_count__mJ4RS"}]
+    )
+    SDescription = TagDescriptor(
+        name="p", attrs_list=[{"class": "styles_paragraph__V0fA2"}]
+    )
+    SGenreBox = TagDescriptor(name="div", attrs_list=[{"data-tid": "28726596"}])
 
 
 def get_soup(text: str, soup_parser: str = "html.parser") -> BeautifulSoup:
@@ -54,34 +59,33 @@ def find_all_tags(
     return None
 
 
+logger = Logger("Parser")
+
+
 class Parser:
     @staticmethod
-    async def parse_page(content: str, page: int) -> Optional[ShowIDSets]:
+    async def parse_page(content: str, page: int) -> Optional[list[ShowIdentifier]]:
         try:
-            logger.debug(f"Parsing page {page}")
+            logger.debug(f"Parsing page {page}...")
             soup = get_soup(content)
 
-            boxes = find_all_tags(soup, KinopoiskTags.page_show_box.value)
+            boxes = find_all_tags(soup, KPTags.PShowBox.value)
             if boxes is None:
                 logger.warning(f"Failed to find show boxes on page {page}")
                 return None
 
-            id_sets = ShowIDSets()
+            sid_list: list[ShowIdentifier] = []
             for box in boxes:
-                link = find_tag(box, KinopoiskTags.page_show_link.value)
+                link = find_tag(box, KPTags.PShowLink.value)
                 if link is None or "href" not in link.attrs:
                     logger.warning(f"Abnormal show box on page {page}: {box.attrs}")
                     continue
 
                 show_type, show_id = link.attrs["href"][1:-1].split("/")
-                show_id = int(show_id)
-                if show_type == "film":
-                    id_sets.films.add(show_id)
-                elif show_type == "series":
-                    id_sets.series.add(show_id)
+                sid_list.append(ShowIdentifier(id=show_id, type=show_type))
 
             logger.debug(f"Done parsing page {page}")
-            return id_sets
+            return sid_list
 
         except Exception as e:
             logger.error(f"Failed parsing page {page}: {e}")
@@ -90,48 +94,50 @@ class Parser:
     @staticmethod
     async def parse_show(
         content: str,
-        show_id: int,
-        show_type: Literal["film", "series"],
+        identifier: ShowIdentifier,
         allow_partial: bool = False,
-    ) -> Optional[ShowInfo]:
+    ) -> Optional[ShowDetails]:
         try:
-            logger.debug(f"Parsing {show_type} {show_id}")
+            logger.debug(f"Parsing {identifier}")
             soup = get_soup(content)
 
-            title_tag = find_tag(soup, KinopoiskTags.title.value)
+            title_tag = find_tag(soup, KPTags.STitle.value)
             if title_tag:
                 title: str = title_tag.text.strip()
                 year_match = re.search(r"\s\(\d{4}\)$", title)
                 if year_match:
                     title = title[: year_match.start()]
             else:
-                logger.warning(f"Failed fetching title for {show_type} {show_id}")
+                logger.warning(f"Failed fetching title for {identifier}")
                 title = None
 
-            rating_tag = find_tag(soup, KinopoiskTags.rating.value)
+            rating_tag = find_tag(soup, KPTags.SRating.value)
             if rating_tag and re.match(r"^\d+\.\d+$", rating_tag.text):
                 rating = float(rating_tag.text)
             else:
-                logger.warning(f"Failed fetching rating for {show_type} {show_id}")
+                logger.warning(f"Failed fetching rating for {identifier}")
                 rating = None
 
-            r_count_tag = find_tag(soup, KinopoiskTags.rating_count.value)
-            if r_count_tag:
-                r_count = int("".join(re.findall(r"(\d)\s?", r_count_tag.text)))
-            else:
-                logger.warning(
-                    f"Failed fetching rating count for {show_type} {show_id}"
+            rating_count_tag = find_tag(soup, KPTags.SRatingCount.value)
+            if rating_count_tag:
+                rating_count = int(
+                    "".join(re.findall(r"(\d)\s?", rating_count_tag.text))
                 )
-                r_count = None
-
-            desc_tag = find_tag(soup, KinopoiskTags.description.value)
-            if desc_tag:
-                desc = desc_tag.text.strip()
             else:
-                logger.warning(f"Failed fetching description for {show_type} {show_id}")
-                desc = None
+                logger.warning(f"Failed fetching rating count for {identifier}")
+                rating_count = None
 
-            genre_box = find_tag(soup, KinopoiskTags.genre_box.value)
+            description_tag = find_tag(soup, KPTags.SDescription.value)
+            if description_tag:
+                description = description_tag.text.strip()
+                for k, v in REPLACE.items():
+                    if k in description:
+                        description = description.replace(k, v)
+            else:
+                logger.warning(f"Failed fetching description for {identifier}")
+                description = None
+
+            genre_box = find_tag(soup, KPTags.SGenreBox.value)
             if genre_box:
                 genre_tags = genre_box.find_all("a")
                 if genre_tags:
@@ -139,28 +145,27 @@ class Parser:
                     if "слова" in genres:
                         genres.remove("слова")
                 else:
-                    logger.warning(f"Abnormal genre box in {show_type} {show_id}")
+                    logger.warning(f"Abnormal genre box in {identifier}")
                     genres = None
             else:
-                logger.warning(f"Failed fetching genres in {show_type} {show_id}")
+                logger.warning(f"Failed fetching genres in {identifier}")
                 genres = None
 
             if not allow_partial and any(
-                field is None for field in (title, rating, r_count, desc, genres)
+                field is None
+                for field in (title, rating, rating_count, description, genres)
             ):
-                raise LookupError(
-                    f"Couldn't fetch all fields for {show_type} {show_id}"
-                )
+                raise LookupError(f"Couldn't fetch all fields for {identifier}")
 
-            logger.debug(f"Done parsing {show_type} {show_id}")
-            return ShowInfo(
+            logger.debug(f"Done parsing {identifier}")
+            return ShowDetails(
                 title=title or "",
                 rating=rating or 0.0,
-                rating_count=r_count or 0,
-                description=desc or "",
+                rating_count=rating_count or 0,
+                description=description or "",
                 genres=genres or [],
             )
 
         except Exception as e:
-            logger.error(f"Failed parsing {show_type} {show_id}: {e}")
+            logger.error(f"Failed parsing {identifier}: {e}")
             return None

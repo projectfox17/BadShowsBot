@@ -1,23 +1,27 @@
-import asyncio, aiofiles
+import asyncio
+import aiofiles
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from typing import Any, Dict, List
 
-from common.models import Show, ShowIDSets
-from src.session import SessionManager
-from src.models import SessionConfig, RequestResult, SnatchResult
-from src.snatcher import Snatcher
+from common.show_models import *
+from src.session import SessionManager, SessionConfig
+from src.snatcher import Snatcher, SnatchResult
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global snatcher
+    global sm
+
     async with aiofiles.open(
         "config/session_config.json", mode="r", encoding="UTF-8"
-    ) as sconf_file:
-        session_config = SessionConfig.model_validate_json(await sconf_file.read())
-    snatcher = Snatcher(SessionManager(session_config))
+    ) as src:
+        session_config = SessionConfig.model_validate_json(await src.read())
+
+    sm = SessionManager(session_config)
     yield
+    sm.close_session()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -25,55 +29,78 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/snatch_page")
 async def snatch_page(
-    page: int = 1, as_shows: bool = False, concurrent: int = 5
-) -> Dict[str, str | SnatchResult | List[SnatchResult]]:
-    page_result = await snatcher.snatch_page_ids(page)
+    page: int = 1,
+    as_shows: bool = False,
+    include_none: bool = False,
+    concurrent: int = 5,
+) -> Dict[str, Any]:
+    page_result = await Snatcher.snatch_identifiers(sm, page)
 
-    if as_shows and page_result.payload:
+    if as_shows and page_result.identifier_list:
         show_results = [
             show_res
-            for show_res in await snatcher.batch_snatch_shows(
-                page_result.payload, concurrent
+            for show_res in await Snatcher.batch_snatch_shows(
+                sm, page_result.identifier_list, concurrent
             )
-            if show_res.payload
+            if include_none or show_res.show
         ]
-        return {"status": "ok" if show_results else "fail", "result": show_results}
+        return {
+            "status": "ok" if show_results else "fail",
+            "mode": "shows",
+            "result": show_results,
+        }
 
     return {
-        "status": "ok" if page_result.payload else "fail",
+        "status": "ok" if page_result.identifier_list else "fail",
+        "mode": "identifiers",
         "result": page_result,
     }
 
 
 @app.get("/batch_snatch_pages")
 async def batch_snatch_pages(
-    page_from: int, page_to: int, as_shows: bool = False, concurrent: int = 5
-) -> Dict[str, str | List[SnatchResult]]:
-    rng = list(
+    page_from: int,
+    page_to: int,
+    as_shows: bool = False,
+    include_none: bool = False,
+    concurrent: int = 5,
+) -> Dict[str, Any]:
+    page_list = list(
         range(page_from, page_to + 1, 1)
         if page_to > page_from
         else range(page_from, page_to - 1, -1)
     )
-    page_results = await snatcher.batch_snatch_page_ids(rng, concurrent)
+    page_results = await Snatcher.batch_snatch_identifiers(sm, page_list, concurrent)
 
     if as_shows:
-        show_results = []
+        sid_list: List[ShowIdentifier] = []
         for page_res in page_results:
-            if page_res.payload:
-                show_results += [
-                    show_res
-                    for show_res in await snatcher.batch_snatch_shows(
-                        page_res.payload, concurrent
-                    )
-                    if show_res.payload
-                ]
-        return {"status": "ok" if show_results else "fail", "result": show_results}
+            if page_res.identifier_list:
+                sid_list += page_res.identifier_list
+
+        show_results = [
+            show_res
+            for show_res in await Snatcher.batch_snatch_shows(sm, sid_list, concurrent)
+            if include_none or show_res.show
+        ]
+        return {
+            "status": "ok" if show_results else "fail",
+            "mode": "shows",
+            "result": show_results,
+        }
 
     return {
         "status": (
-            "ok" if any(page_res.payload for page_res in page_results) else "fail"
+            "ok"
+            if any(page_res.identifier_list for page_res in page_results)
+            else "fail"
         ),
-        "result": page_results,
+        "mode": "identifiers",
+        "result": [
+            page_res
+            for page_res in page_results
+            if include_none or page_res.identifier_list
+        ],
     }
 
 
