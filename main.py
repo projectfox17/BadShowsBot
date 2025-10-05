@@ -13,14 +13,12 @@ async def main():
     st.generate_nodes(
         [
             NodeSpec(
-                name="aboba", type=NodeType.FILE, relative_path="config/aboba.txt"
+                name="alpha", type=NodeType.FILE, relative_path="config/alpha.txt"
             ),
-            NodeSpec(
-                name="obema", type=NodeType.FILE, relative_path="config/obema.json"
-            ),
+            NodeSpec(name="beta", type=NodeType.FILE, relative_path="config/beta.json"),
         ]
     )
-    await st.nodes_dump_json(st.root_path / "popa.json")
+    await st.nodes_dump_json(st.root_path / "dump.json")
 
 
 if __name__ == "__main__":
