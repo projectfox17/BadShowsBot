@@ -19,15 +19,15 @@ default_headers = {
 
 
 def make_session_config_file() -> None:
-    user, platform = getpass.getuser(), platform.system()
+    user, os_type = getpass.getuser(), platform.system()
 
-    if platform == "Windows":
+    if os_type == "Windows":
         print("Long live Billy (Herrington)")
         hd = os.getenv("HOMEDRIVE", default="C:\\")
         ff_path = (
             Path(hd) / "/Users" / user / "AppData" / "Roaming" / "Mozilla" / "Firefox"
         )
-    elif platform == "Linux":
+    elif os_type == "Linux":
         print("Go touch grass ffs")
         ff_path = Path(f"/home/{user}/.mozilla/firefox")
     else:
@@ -74,11 +74,12 @@ def make_session_config_file() -> None:
     if not cookies:
         print("Failed fetching kinopoisk cookies from db")
 
-    # Backup session config file if exists
-    project_path = Path(__file__).parents[2].resolve()
-    session_cfg_path = project_path / "config" / "session_config.json"
+    session_cfg_path = (
+        Path(__file__).parents[1].resolve() / "config" / "session_config.json"
+    )
     if session_cfg_path.exists():
-        bak_path = session_cfg_path.with_suffix(".json.bak")
+        print("Backing up old config")
+        bak_path = session_cfg_path.with_suffix(".bak.json")
         bak_path.touch()
         with open(session_cfg_path, mode="rb") as src, open(
             bak_path, mode="wb"
@@ -92,6 +93,7 @@ def make_session_config_file() -> None:
         dest.write(
             json.dumps({"headers": default_headers, "cookies": cookies}, indent=4)
         )
+    print(f"Wrote session config to {session_cfg_path}")
 
 
 if __name__ == "__main__":
